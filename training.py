@@ -17,10 +17,16 @@ hidden_size = 128
 input_size = 13
 output_size = 6
 dt = 0.1
-tau = 100
+tau = 300
 batch_size = 32
 num_epochs = 20
-model_path = './model.pt'
+stimulus_duration = 8
+model_path = './long_model.pt'
+
+train_losses = []
+train_accuracies = []
+test_losses = []
+test_accuracies = []
 
 # Create an instance of the StimuliDataset for training data
 train_dataset = StimuliDataset(train_samples)
@@ -34,7 +40,7 @@ net = RNNNet(input_size=input_size, hidden_size=hidden_size, output_size=output_
 print(net)
 
 # Use Adam optimizer
-optimizer = optim.Adam(net.parameters(), lr=0.3)
+optimizer = optim.Adam(net.parameters(), lr=0.2)
 criterion = nn.CrossEntropyLoss()
 
 running_loss = 0
@@ -60,7 +66,7 @@ for epoch in range(num_epochs):
         # print(labels)
         labels = torch.tensor(labels.squeeze(-1), dtype=torch.int64)
         #labels = nn.functional.one_hot(torch.tensor(labels.squeeze(-1), dtype=torch.int64), num_classes=6)
-        stimuli = np.stack([stimulus] * 3, axis=1)
+        stimuli = np.stack([stimulus] * stimulus_duration, axis=1)
         stop_cue = np.zeros((32,1,input_size))
         
         inputs  = np.concatenate((stimuli, stop_cue), axis=1)
@@ -88,8 +94,8 @@ for epoch in range(num_epochs):
         num_batches_train += 1
 
     average_loss_train = running_loss_train / num_batches_train
-    average_acc_test = running_acc_train / num_batches_train
-    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {average_loss_train:.4f}, Accuracy: {average_acc_test:.4f}')    
+    average_acc_train = running_acc_train / num_batches_train
+    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {average_loss_train:.4f}, Accuracy: {average_acc_train:.4f}')    
     # Evaluation phase (using the testing data)
     net.eval()  # Set the network to evaluation mode
     with torch.no_grad():  # Disable gradient computation for evaluation
@@ -100,7 +106,7 @@ for epoch in range(num_epochs):
         for batch_idx, (stimulus, labels) in enumerate(test_dataloader):
             labels = torch.tensor(labels.squeeze(-1), dtype=torch.int64)
             #labels = nn.functional.one_hot(torch.tensor(labels.squeeze(-1), dtype=torch.int64), num_classes=6)
-            stimuli = np.stack([stimulus] * 3, axis=1)
+            stimuli = np.stack([stimulus] * stimulus_duration, axis=1)
             stop_cue = np.zeros((32,1,input_size))
 
             inputs  = np.concatenate((stimuli, stop_cue), axis=1)
@@ -128,5 +134,33 @@ for epoch in range(num_epochs):
         average_acc_test = running_acc_test / num_batches_test
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {average_loss_test:.4f}, Accuracy: {average_acc_test:.4f}')
         
+    train_losses.append(average_loss_train)
+    train_accuracies.append(average_acc_train)
+    test_losses.append(average_loss_test)
+    test_accuracies.append(average_acc_test)
+        
 # Save the model
 torch.save(net.state_dict(), model_path)
+
+
+
+
+
+# Move NumPy arrays to CPU
+train_losses = torch.tensor(train_losses).cpu()
+train_accuracies = torch.tensor(train_accuracies).cpu()
+test_losses = torch.tensor(test_losses).cpu()
+test_accuracies = torch.tensor(test_accuracies).cpu()
+
+# Convert lists to NumPy arrays
+train_losses = np.array(train_losses)
+train_accuracies = np.array(train_accuracies)
+test_losses = np.array(test_losses)
+test_accuracies = np.array(test_accuracies)
+
+print("train_losses:",train_losses)
+# Save metrics to .npy files
+np.save('./train_losses.npy', train_losses)
+np.save('./train_accuracies.npy', train_accuracies)
+np.save('./test_losses.npy', test_losses)
+np.save('./test_accuracies.npy', test_accuracies)
